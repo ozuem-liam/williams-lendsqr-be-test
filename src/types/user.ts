@@ -15,3 +15,9 @@ export interface IUserToAuthJSON {
     phone_number: string;
     token?: string;
 }
+
+export interface UserResponse {
+    isSuccess: boolean;
+    message: string;
+    data?: any;
+}

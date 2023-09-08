@@ -1,27 +1,21 @@
 import ApiError from '../../utils/ApiError';
+import { Request } from 'express';
 import httpStatus from 'http-status';
 import { knex } from '../../database/knex';
-
-export interface UserResponce {
-    isSuccess: boolean;
-    message: string;
-    data?: any;
-}
+import { UserResponse } from '../user/user.service';
+import { SharedService } from '../shared/shared.service';
 
 export class WalletService {
-    public async getWallet(req: any): Promise<UserResponce> {
+    sharedService = new SharedService();
+
+    public async getWallet(req: Request): Promise<UserResponse> {
         try {
             const user = req.user;
 
-            const account = await knex('users')
-                .where({ email: user.email })
-                .select('id', 'useer_id', 'first_name', 'last_name', 'email', 'phone_number');
-            if (!account) throw new ApiError(httpStatus.UNPROCESSABLE_ENTITY, 'Account not found');
+            const account = await this.sharedService.getAUser(user.email);
 
             // get user's wallet
-            const wallet = await knex('wallets')
-                .where({ user_id: account[0].user_id })
-                .select('id', 'balance', 'user_id');
+            const wallet = await this.sharedService.getAUsersWallet(account[0].user_id);
 
             const message = 'Wallet retrieved created';
 
@@ -32,16 +26,13 @@ export class WalletService {
         }
     }
 
-    public async fundWallet(req: any): Promise<UserResponce> {
+    public async fundWallet(req: Request): Promise<UserResponse> {
         try {
             const user = req.user;
 
             const { amount, account_number } = req.body;
 
-            const account = await knex('users')
-                .where({ email: user.email })
-                .select('id', 'useer_id', 'first_name', 'last_name', 'email', 'phone_number');
-            if (!account) throw new ApiError(httpStatus.UNPROCESSABLE_ENTITY, 'Account not found');
+            const account = await this.sharedService.getAUser(user.email);
 
             // ---------------------------------------------------------------------
             // Call a third party API like Paystack to confirm account and make real life funding
@@ -66,21 +57,16 @@ export class WalletService {
         }
     }
 
-    public async withdrawFunds(req: any): Promise<UserResponce> {
+    public async withdrawFunds(req: Request): Promise<UserResponse> {
         try {
             const user = req.user;
 
             const { amount, account_number, recieving_bank_account_number, recieving_bank_code } = req.body;
 
-            const account = await knex('users')
-                .where({ email: user.email })
-                .select('id', 'useer_id', 'first_name', 'last_name', 'email', 'phone_number');
-            if (!account) throw new ApiError(httpStatus.UNPROCESSABLE_ENTITY, 'Account not found');
+            const account = await this.sharedService.getAUser(user.email);
 
             // withdraw from user's wallet
-            let wallet = await knex('wallets')
-                .where({ user_id: account[0].user_id, account_number: account_number })
-                .select('id', 'account_number', 'balance', 'user_id');
+            let wallet = await this.sharedService.getAUsersWallet(account[0].user_id);
 
             if (!wallet[0]) return { isSuccess: false, message: 'Unable to complete transaction' };
 
@@ -113,21 +99,16 @@ export class WalletService {
         }
     }
 
-    public async transferFund(req: any): Promise<UserResponce> {
+    public async transferFund(req: Request): Promise<UserResponse> {
         try {
             const user = req.user;
 
             const { amount, account_number } = req.body;
 
-            const account = await knex('users')
-                .where({ email: user.email })
-                .select('id', 'useer_id', 'first_name', 'last_name', 'email', 'phone_number');
-            if (!account) throw new ApiError(httpStatus.UNPROCESSABLE_ENTITY, 'Account not found');
+            const account = await this.sharedService.getAUser(user.email);
 
             // get user's wallet
-            const wallet = await knex('wallets')
-                .where({ user_id: account[0].user_id })
-                .select('id', 'account_number', 'balance', 'user_id');
+            const wallet = await this.sharedService.getAUsersWallet(account[0].user_id);
 
             if (!this.hasEnoughBalance(wallet[0], amount)) {
                 const message = 'Insufficient balance';

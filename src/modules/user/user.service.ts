@@ -2,17 +2,15 @@ import ApiError from '../../utils/ApiError';
 import httpStatus from 'http-status';
 import { knex } from '../../database/knex';
 import crypto from 'crypto';
-import { IUser, IUserToAuthJSON } from '../../types/user';
+import { IUserToAuthJSON, UserResponse } from '../../types/user';
 import { seal } from '../../middlewares/jwt';
 import Config from '../../config/config';
+import { SharedService } from '../shared/shared.service';
 
-export interface UserResponce {
-    isSuccess: boolean;
-    message: string;
-    data?: any;
-}
 export class UserService {
-    public async createUser(req: any): Promise<UserResponce> {
+  sharedService = new SharedService();
+  
+    public async createUser(req: any): Promise<UserResponse> {
         try {
             const { first_name, last_name, email, password, phone_number } = req.body;
 
@@ -33,7 +31,7 @@ export class UserService {
 
             const user = await knex('users')
                 .insert(newUser)
-                .returning(['id', 'first_name', 'last_name', 'email', 'phone']);
+                .returning(['id', 'user_id', 'first_name', 'last_name', 'email', 'phone']);
 
             if (!user) {
                 const message = 'Could not create account';
@@ -55,25 +53,22 @@ export class UserService {
         }
     }
 
-    public async loginUser(req: any): Promise<UserResponce> {
+    public async loginUser(req: any): Promise<UserResponse> {
         try {
             const { email, password } = req.body;
-            const account = await knex('users')
-                .where({ email })
-                .select('id', 'user_id', 'first_name', 'last_name', 'email', 'phone_number', 'password', 'salt');
+
+            const account = await this.sharedService.getAUser(email);
 
             if (!account) throw new ApiError(httpStatus.UNPROCESSABLE_ENTITY, 'Invalid account credentials!');
 
             if (!this.validPassword(password, account[0].password, account[0].salt)) {
                 throw new ApiError(
                     httpStatus.UNPROCESSABLE_ENTITY,
-                    'Invalid account credentials. Your account will be locked after 5 tries!',
+                    'Invalid account credentials',
                 );
             }
 
-            const wallet = await knex('wallets')
-                .where({ user_id: account[0].user_id })
-                .select('id', 'account_number', 'balance', 'user_id');
+            const wallet = await this.sharedService.getAUsersWallet(account[0].user_id)
 
             const user = await this.toAuthJSON(account);
             const message = 'Login was successful';
@@ -135,3 +130,6 @@ export class UserService {
         return result;
     }
 }
+
+export { UserResponse };
+
