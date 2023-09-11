@@ -69,7 +69,7 @@ The environment variables can be found and modified in the `.env` file. They com
 
 ```bash
 # Port number
-APP_PORT=9000
+APP_PORT=8003
 
 # Prefix app path
 APP_PREFIX_PATH=/

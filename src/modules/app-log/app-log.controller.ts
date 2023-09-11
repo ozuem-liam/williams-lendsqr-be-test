@@ -1,12 +1,14 @@
 import httpStatus from 'http-status';
 import ApiError from '../../utils/ApiError';
-import { transactionService } from './transaction.service';
+import { AppLogService } from './app-log.service';
 import { successResponse } from '../../utils/success-response';
 
-export class TransactionController {
-    public async getTransactions(req: any, res: any, next: (error: any) => Promise<void>) {
+export class AppLogController {
+    appLogService = new AppLogService();
+
+    public async getAppLogs(req: any, res: any, next: (error: any) => Promise<void>) {
         try {
-            const { isSuccess, message, data } = await transactionService.getTransactions(req);
+            const { isSuccess, message, data } = await this.appLogService.getAppLogs();
 
             if (isSuccess) {
                 return successResponse(httpStatus.CREATED, res, message, data)

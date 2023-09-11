@@ -1,27 +1,25 @@
 import ApiError from '../../utils/ApiError';
 import { Request } from 'express';
 import httpStatus from 'http-status';
-import { knex } from '../../database/knex';
+import knexapp from '../../database/knex';
 import { UserResponse } from '../user/user.service';
-import { SharedService } from '../shared/shared.service';
+import { sharedService } from '../shared/shared.service';
 
-export class WalletService {
-    sharedService = new SharedService();
-
+class WalletService {
     public async getWallet(req: Request): Promise<UserResponse> {
         try {
             const user = req.user;
 
-            const account = await this.sharedService.getAUser(user.email);
+            const account = await sharedService.getAUser(user.email);
 
             // get user's wallet
-            const wallet = await this.sharedService.getAUsersWallet(account[0].user_id);
+            const wallet = await sharedService.getAUsersWallet(account[0].id);
 
             const message = 'Wallet retrieved created';
 
             return { isSuccess: true, message, data: { wallet: wallet[0] } };
         } catch (e) {
-            const message = 'Could not get wallet';
+            const message = e.message;
             return { isSuccess: false, message };
         }
     }
@@ -32,27 +30,27 @@ export class WalletService {
 
             const { amount, account_number } = req.body;
 
-            const account = await this.sharedService.getAUser(user.email);
+            const account = await sharedService.getAUser(user.email);
 
             // ---------------------------------------------------------------------
             // Call a third party API like Paystack to confirm account and make real life funding
             // ---------------------------------------------------------------------
 
             // fund user's wallet
-            const wallet = await knex('wallets')
-                .where({ user_id: account[0].user_id, account_number: account_number })
+            const wallet = await knexapp('wallets')
+                .where({ user_id: account[0].id, account_number: account_number })
                 .increment({
                     balance: amount,
-                    times: 1,
-                })
-                .select('id', 'account_number', 'balance', 'user_id');
+                });
 
-            if (!wallet[0]) return { isSuccess: false, message: 'Unable to complete transaction' };
+            if (!wallet) return { isSuccess: false, message: 'Unable to complete transaction' };
+
+            const walletn = await sharedService.getAUsersWallet(user.id);
 
             const message = 'Wallet funded was successful';
-            return { isSuccess: true, message, data: { user: user, wallet: wallet[0] } };
+            return { isSuccess: true, message, data: { user: user, wallet: walletn[0] } };
         } catch (e) {
-            const message = 'Could not fund wallet';
+            const message = e.message;
             return { isSuccess: false, message };
         }
     }
@@ -63,10 +61,10 @@ export class WalletService {
 
             const { amount, account_number, recieving_bank_account_number, recieving_bank_code } = req.body;
 
-            const account = await this.sharedService.getAUser(user.email);
+            const account = await sharedService.getAUser(user.email);
 
             // withdraw from user's wallet
-            let wallet = await this.sharedService.getAUsersWallet(account[0].user_id);
+            let wallet = await sharedService.getAUsersWallet(account[0].id);
 
             if (!wallet[0]) return { isSuccess: false, message: 'Unable to complete transaction' };
 
@@ -81,20 +79,19 @@ export class WalletService {
                 return { isSuccess: false, message };
             }
 
-            wallet = await knex('wallets')
-                .where({ user_id: account[0].user_id, account_number: account_number })
+            wallet = await knexapp('wallets')
+                .where({ user_id: account[0].id, account_number: account_number })
                 .decrement({
                     balance: amount,
                 })
-                .select('id', 'account_number', 'balance', 'user_id');
 
             // ---------------------------------------------------------------------
             // Call a third party API like Paystack to confirm account and make real life payment to bank account
             // ---------------------------------------------------------------------
             const message = 'Withdrawal was successful';
-            return { isSuccess: true, message, data: { user: user, wallet: wallet[0] } };
+            return { isSuccess: true, message, data: { user: user, wallet: wallet } };
         } catch (e) {
-            const message = 'Could not withdraw from account';
+            const message = e.message;
             return { isSuccess: false, message };
         }
     }
@@ -103,20 +100,19 @@ export class WalletService {
         try {
             const user = req.user;
 
-            const { amount, account_number } = req.body;
+            const { amount, receiver_user_id } = req.body;
 
-            const account = await this.sharedService.getAUser(user.email);
+            const account = await sharedService.getAUser(user.email);
 
             // get user's wallet
-            const wallet = await this.sharedService.getAUsersWallet(account[0].user_id);
+            const wallet = await sharedService.getAUsersWallet(account[0].id);
 
             if (!this.hasEnoughBalance(wallet[0], amount)) {
                 const message = 'Insufficient balance';
                 return { isSuccess: false, message };
             }
-
             // get receiver info
-            const { receiver } = await this.confirmUserWallet(account_number);
+            const { receiver } = await this.confirmUserWallet(receiver_user_id);
             if (!receiver) return { isSuccess: false, message: 'Unable to fetch user wallet' };
 
             const { userWallet, receiverWallet } = await this.fundReceiverWallet(
@@ -127,9 +123,9 @@ export class WalletService {
             if (!userWallet && !receiverWallet) return { isSuccess: false, message: 'Unable to complete transaction' };
 
             const message = 'Transfer was successful';
-            return { isSuccess: true, message, data: { user: user, wallet: userWallet[0] } };
+            return { isSuccess: true, message, data: { user: user, wallet: wallet[0] } };
         } catch (e) {
-            const message = 'Could not log into account';
+            const message = e.message;
             return { isSuccess: false, message };
         }
     }
@@ -138,14 +134,10 @@ export class WalletService {
         account_number: string,
     ): Promise<{ isSuccess: boolean; message: string; receiver: any }> {
         // get user's wallet
-        const nwallet = await knex('wallets')
-            .where({ account_number: account_number })
-            .select('id', 'account_number', 'balance', 'user_id');
-        if (!nwallet) throw new ApiError(httpStatus.UNPROCESSABLE_ENTITY, 'Wallet not found');
+        const nwallet = await knexapp('wallets').where({ account_number: account_number });
+        if (nwallet.length == 0) throw new ApiError(httpStatus.UNPROCESSABLE_ENTITY, 'Wallet not found');
 
-        const recieverAccount = await knex('users')
-            .where({ id: nwallet[0].user_id })
-            .select('id', 'useer_id', 'first_name', 'last_name', 'email', 'phone_number');
+        const recieverAccount = await knexapp('users').where({ id: nwallet[0].user_id });
         if (!recieverAccount) throw new ApiError(httpStatus.UNPROCESSABLE_ENTITY, 'Account not found');
         const receiver = {
             account: recieverAccount[0],
@@ -161,14 +153,13 @@ export class WalletService {
     ): Promise<{ userWallet: any; receiverWallet: any }> {
         const [userWallet, receiverWallet] = await Promise.all([
             // discount sender wallet
-            await knex('wallets').where({ user_id: sender_wallet_user_id }).decrement({
+            await knexapp('wallets').where({ user_id: sender_wallet_user_id }).decrement({
                 balance: amount,
             }),
 
             // credit receiver wallet
-            await knex('wallets').where({ user_id: receiver_wallet_user_id }).increment({
+            await knexapp('wallets').where({ user_id: receiver_wallet_user_id }).increment({
                 balance: amount,
-                times: 1,
             }),
         ]);
         return { userWallet, receiverWallet };
@@ -179,3 +170,7 @@ export class WalletService {
         return false;
     }
 }
+
+const walletService = new WalletService();
+
+export { walletService };

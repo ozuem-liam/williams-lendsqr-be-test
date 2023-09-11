@@ -5,6 +5,5 @@ import knex from 'knex';
 const environment = process.env.APP_ENV || 'development';
 const nconfig = config[environment];
 
-module.exports = knex(nconfig);
-
-export { knex };
+const knexapp = knex(nconfig);
+export default knexapp;

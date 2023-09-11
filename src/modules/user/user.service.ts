@@ -1,22 +1,21 @@
 import ApiError from '../../utils/ApiError';
 import httpStatus from 'http-status';
-import { knex } from '../../database/knex';
+import knexapp from '../../database/knex';
 import crypto from 'crypto';
 import { IUserToAuthJSON, UserResponse } from '../../types/user';
 import { seal } from '../../middlewares/jwt';
 import Config from '../../config/config';
-import { SharedService } from '../shared/shared.service';
+import { sharedService } from '../shared/shared.service';
 
-export class UserService {
-  sharedService = new SharedService();
-  
+class UserService {
     public async createUser(req: any): Promise<UserResponse> {
         try {
             const { first_name, last_name, email, password, phone_number } = req.body;
 
             // Check if email is verified
-            const isEmailVerified = await knex('users').where({ email: email });
-            if (isEmailVerified) throw new ApiError(httpStatus.UNPROCESSABLE_ENTITY, 'Email already registered!');
+            const isEmailVerified = await knexapp('users').where({ email: email });
+            if (isEmailVerified.length > 0)
+                throw new ApiError(httpStatus.UNPROCESSABLE_ENTITY, 'Email already registered!');
 
             const { salt, hashedPassword } = await this.setPassword(password);
 
@@ -29,26 +28,26 @@ export class UserService {
                 salt: salt,
             };
 
-            const user = await knex('users')
-                .insert(newUser)
-                .returning(['id', 'user_id', 'first_name', 'last_name', 'email', 'phone']);
+            const user: any = await knexapp('users').insert(newUser);
 
             if (!user) {
                 const message = 'Could not create account';
                 return { isSuccess: false, message };
             }
             // Create user's wallet
-            const wallet = await knex('wallets')
-                .insert({ user_id: user[0].id, account_number: this.generateAccountNumber() })
-                .returning(['id', 'account_number', 'balance', 'user_id']);
+            const wallet = await knexapp('wallets')
+                .insert({ user_id: user[0], account_number: this.generateAccountNumber() });
+
+            const createdUser = await knexapp('users').where({ id: user[0] })
+            const usern = await this.toAuthJSON(createdUser[0]);
+
+            const createdWallet = await knexapp('wallets').where({ id: wallet[0] })
 
             const message = 'Account account created';
 
-            // logger.(message);
-
-            return { isSuccess: true, message, data: { user: user[0], wallet: wallet[0] } };
+            return { isSuccess: true, message, data: { user: usern,  wallet: createdWallet[0] } };
         } catch (e) {
-            const message = 'Could not create account';
+            const message = e.message;
             return { isSuccess: false, message };
         }
     }
@@ -57,45 +56,40 @@ export class UserService {
         try {
             const { email, password } = req.body;
 
-            const account = await this.sharedService.getAUser(email);
-
-            if (!account) throw new ApiError(httpStatus.UNPROCESSABLE_ENTITY, 'Invalid account credentials!');
+            const account = await sharedService.getAUser(email);
 
             if (!this.validPassword(password, account[0].password, account[0].salt)) {
-                throw new ApiError(
-                    httpStatus.UNPROCESSABLE_ENTITY,
-                    'Invalid account credentials',
-                );
+                throw new ApiError(httpStatus.UNPROCESSABLE_ENTITY, 'Invalid account credentials');
             }
 
-            const wallet = await this.sharedService.getAUsersWallet(account[0].user_id)
+            const wallet = await sharedService.getAUsersWallet(account[0].id);
 
-            const user = await this.toAuthJSON(account);
+            const user = await this.toAuthJSON(account[0]);
             const message = 'Login was successful';
             return { isSuccess: true, message, data: { user: user, wallet: wallet[0] } };
         } catch (e) {
-            const message = 'Could not log into account';
+            const message = e.message;
             return { isSuccess: false, message };
         }
     }
 
     private setPassword(password: string) {
         const salt = crypto.randomBytes(16).toString('hex');
-        const hashedPassword = crypto.pbkdf2Sync(password, salt, 10000, 512, 'sha512').toString('hex');
+        const hashedPassword = crypto.pbkdf2Sync(password, salt, 10000, 512, 'sha512').toString('hex').substring(0, 10);
         return { salt, hashedPassword };
     }
 
     private validPassword(password: string, hashedPassword: string, salt: string) {
         const hash = crypto.pbkdf2Sync(password, salt, 10000, 512, 'sha512').toString('hex');
-        return hashedPassword === hash;
+        return hashedPassword === hash.substring(0, 10);
     }
 
-    private async generateJWT(account: any[]): Promise<string> {
+    private async generateJWT(account: any): Promise<string> {
         const token = await seal(
             {
-                email: account[0].email,
-                first_name: account[0].first_name,
-                last_name: account[0].last_name,
+                email: account.email,
+                first_name: account.first_name,
+                last_name: account.last_name,
             },
             Config.jwtSecret,
             Config.jwtExpire,
@@ -104,8 +98,8 @@ export class UserService {
         return token;
     }
 
-    private async toAuthJSON(account: any[]): Promise<IUserToAuthJSON> {
-        const { id, user_id, first_name, last_name, email, phone_number } = account[0];
+    private async toAuthJSON(account: any): Promise<IUserToAuthJSON> {
+        const { id, user_id, first_name, last_name, email, phone_number } = account;
         return {
             id,
             user_id,
@@ -131,5 +125,5 @@ export class UserService {
     }
 }
 
-export { UserResponse };
-
+const userService = new UserService();
+export { UserResponse, userService };

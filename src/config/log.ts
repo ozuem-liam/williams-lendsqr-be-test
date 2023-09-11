@@ -1,6 +1,6 @@
 import pino from 'pino';
 import Config from './config';
-import { knex } from '../database/knex';
+import knex from 'knex';
 import { Log, LogLevels, LogTransport, LogTypes, LogWriteObject, UnknownObject, LogQueryCriteria } from '../types/log';
 import { AppEnv } from '../types/config';
 import { Request, Response, NextFunction } from '../types/app';

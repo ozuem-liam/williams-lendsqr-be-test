@@ -1,7 +1,7 @@
 import * as jwt from 'jsonwebtoken';
 import { NextFunction, Request, Response } from 'express';
 import Config from '../config/config';
-import { knex } from '../database/knex';
+import knexapp from '../database/knex';
 
 /**
  * Generate token based on payload.
@@ -39,13 +39,12 @@ export const authenticated = async (req: Request, res: Response, next: NextFunct
         if (token && token[0] == 'Bearer') {
             const user = await unseal(token[1], Config.jwtSecret);
 
-            const account = await knex('users')
-                .where({ id: user.id })
-                .select('id', 'first_name', 'last_name', 'email', 'phone_number');
+            const account = await knexapp('users')
+                .where({ email: user.email })
 
-            if (!account[0]) throw new Error('unknown data detected!');
+            if (account.length == 0) throw new Error('unknown data detected!');
 
-            req.user = account;
+            req.user = account[0];
             next();
         } else {
             throw new Error();

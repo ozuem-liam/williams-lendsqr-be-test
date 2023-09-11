@@ -30,7 +30,7 @@ export const getConfig = (): Config => {
         environment: process.env.APP_ENV || AppEnv.DEVELOPMENT,
         isProduction: process.env.APP_ENV === AppEnv.PRODUCTION,
         isTest: process.env.APP_ENV === AppEnv.TEST,
-        appPort: Number(process.env.APP_PORT) || 9000,
+        appPort: Number(process.env.APP_PORT) || 9003,
         appPrefixPath: process.env.APP_PREFIX_PATH || appPrefix,
         jwtSecret: process.env.JWT_SECRET || 'somerandomkeyherena',
         jwtExpire: process.env.JWT_EXPIRE || '1d',

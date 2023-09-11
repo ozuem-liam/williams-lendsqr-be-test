@@ -5,10 +5,8 @@ const Joi = BaseJoi.extend(JoiDate);
 
 export const validateTransferPayload = (transfer: any): ValidationResult<any> => {
     const schema: ObjectSchema = Joi.object({
-      user_id: Joi.string().required(),
       receiver_user_id: Joi.string().required(),
       amount: Joi.number().required(),
-      user: Joi.any().optional(),
     }).required();
   
     return schema.validate(transfer);
