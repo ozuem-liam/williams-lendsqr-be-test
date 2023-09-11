@@ -5,10 +5,10 @@ const config: { [key: string]: Knex.Config } = {
     development: {
         client: 'mysql',
         connection: {
-            host: 'localhost',
-            database: 'test',
-            user: 'root',
-            password: 'Willi@ms1996',
+            host: process.env.DB_HOST,
+            database: process.env.DB_NAME,
+            user: process.env.DB_USER,
+            password: process.env.DB_USER_PWD,
         },
         migrations: {
             directory: __dirname + '/migrations',

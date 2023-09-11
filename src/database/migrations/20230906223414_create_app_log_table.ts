@@ -1,4 +1,4 @@
-import knex from 'knex';
+import { Knex } from 'knex';
 
 const LogTypes = ['request', 'response', 'error', 'info', 'debug'];
 export async function up(knex: Knex): Promise<void> {
